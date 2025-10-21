@@ -39,72 +39,57 @@ def analyze_string(value: str) -> dict:
 
 VOWELS = ["a", "e", "i", "o", "u"]
 
+VOWELS = ["a", "e", "i", "o", "u"]
 
 def parse_nl_query(q: str) -> dict:
-    """
-    Robust heuristic parser for basic NL filters expected by the task.
-
-    Examples handled:
-      - "all single word palindromic strings"
-      - "strings longer than 10 characters"
-      - "strings more than 10 characters"
-      - "strings at least 10 characters"
-      - "strings fewer than 10 characters" / "less than 10"
-      - "strings exactly 10 characters"
-      - "strings containing the letter z" / "contain letter 'z'"
-      - "palindromic strings that contain the first vowel"
-      - "palindrome" / "palindromic" keywords
-    """
     if not q or not isinstance(q, str):
         raise ValueError("query must be a non-empty string")
 
     original = q
     q = q.strip().lower()
-    filters: Dict[str, object] = {}
+    filters = {}
 
-    # palindromic keyword (palindrome / palindromic)
+    # 1) Palindrome keyword
     if re.search(r"\bpalindrom(e|ic)?\b", q):
         filters["is_palindrome"] = True
 
-    # single / one word
+    # 2) Single-word
     if re.search(r"\b(single|one)[ -]?word\b", q):
         filters["word_count"] = 1
 
-    # longer than / more than N characters
-    m = re.search(r"(longer|more)\s+than\s+(\d+)\s*chars?|characters?", q)
+    # 3) First vowel (handle BEFORE generic 'contains')
+    if "first vowel" in q:
+        filters["contains_character"] = VOWELS[0]  # heuristic = 'a'
+
+    # 4) Length phrases
+    m = re.search(r"(longer|more)\s+than\s+(\d+)\s*(?:chars?|characters?)", q)
     if m:
         filters["min_length"] = int(m.group(2)) + 1
 
-    # at least N characters
-    m = re.search(r"at\s+least\s+(\d+)\s*chars?|characters?", q)
+    m = re.search(r"at\s+least\s+(\d+)\s*(?:chars?|characters?)", q)
     if m:
         filters["min_length"] = max(int(m.group(1)), int(filters.get("min_length", 0)))
 
-    # fewer/less than N characters
-    m = re.search(r"(fewer|less)\s+than\s+(\d+)\s*chars?|characters?", q)
+    m = re.search(r"(fewer|less)\s+than\s+(\d+)\s*(?:chars?|characters?)", q)
     if m:
         filters["max_length"] = int(m.group(2)) - 1
 
-    # exactly N characters
-    m = re.search(r"exactly\s+(\d+)\s*chars?|characters?", q)
+    m = re.search(r"exactly\s+(\d+)\s*(?:chars?|characters?)", q)
     if m:
         n = int(m.group(1))
         filters["min_length"] = n
         filters["max_length"] = n
 
-    # containing the letter X (quotes optional)
-    m = re.search(r"contain(?:ing)?\s+(?:the\s+letter\s+)?'?(?P<ch>[a-z])'?", q)
-    if m:
-        filters["contains_character"] = m.group("ch")
-
-    # first vowel heuristic
-    if "first vowel" in q:
-        filters.setdefault("contains_character", VOWELS[0])
+    # 5) Contains letter (ONLY if not already set by 'first vowel')
+    if "contains_character" not in filters:
+        m = re.search(r"(?:the\s+letter\s+)?'?(?P<ch>[a-z])'?\b", q)
+        # Require the verb 'contain' nearby to avoid catching letters from normal words like 'the'
+        if m and re.search(r"\bcontain(?:ing)?\b", q):
+            filters["contains_character"] = m.group("ch")
 
     if not filters:
         raise ValueError("unable to parse query")
 
-    # basic conflict check
     if "min_length" in filters and "max_length" in filters:
         if int(filters["min_length"]) > int(filters["max_length"]):
             raise RuntimeError("conflicting filters")
