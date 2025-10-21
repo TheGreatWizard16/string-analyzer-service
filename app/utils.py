@@ -81,11 +81,11 @@ def parse_nl_query(q: str) -> dict:
         filters["max_length"] = n
 
     # 5) Contains letter (ONLY if not already set by 'first vowel')
+    # 5) Contains letter — must follow the word "contain/containing"
     if "contains_character" not in filters:
-        m = re.search(r"(?:the\s+letter\s+)?'?(?P<ch>[a-z])'?\b", q)
-        # Require the verb 'contain' nearby to avoid catching letters from normal words like 'the'
-        if m and re.search(r"\bcontain(?:ing)?\b", q):
-            filters["contains_character"] = m.group("ch")
+        m = re.search(r"contain(?:ing)?\s+(?:the\s+letter\s+)?([a-z])\b", q)
+        if m:
+            filters["contains_character"] = m.group(1)
 
     if not filters:
         raise ValueError("unable to parse query")
@@ -95,3 +95,5 @@ def parse_nl_query(q: str) -> dict:
             raise RuntimeError("conflicting filters")
 
     return {"original": original, "parsed_filters": filters}
+
+    
